@@ -280,7 +280,8 @@ html, body { width:100%; height:100%; background:var(--bg); color:var(--text); f
 <div id="break-overlay">
   <div class="break-emoji">🧘</div>
   <div class="break-title">Time to Move</div>
-  <div class="break-sub">You've been sitting too long · Stand up & stretch</div>
+  <div class="break-sub">You've been sitting too long · Stand up &amp; stretch</div>
+  <div id="break-countdown" style="font-family:'Courier New',monospace;font-size:clamp(32px,6vw,56px);color:rgba(237,232,224,0.5);letter-spacing:0.1em;margin:8px 0;">05:00</div>
   <button class="btn-dismiss" onclick="dismissBreak()">Got it, back to work</button>
 </div>
 
@@ -314,6 +315,14 @@ html, body { width:100%; height:100%; background:var(--bg); color:var(--text); f
       <div id="sound-list"></div>
     </div>
 
+    <div class="sp-sec">Timezone</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0 18px;">
+      <div class="setting-row">
+        <div><div class="sr-label">Timezone</div><div class="sr-sub">Used for all session times</div></div>
+        <select class="f-input" id="tzSelect" style="width:auto;padding:6px 10px;font-size:12px;" onchange="saveTz()"></select>
+      </div>
+    </div>
+
     <div class="sp-sec">Reminders</div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0 18px;">
       <div class="setting-row">
@@ -321,8 +330,12 @@ html, body { width:100%; height:100%; background:var(--bg); color:var(--text); f
         <div class="toggle on" id="tgl-break" onclick="togglePref('breakOn')"></div>
       </div>
       <div class="setting-row">
-        <div><div class="sr-label">Interval (minutes)</div></div>
+        <div><div class="sr-label">Interval (minutes)</div><div class="sr-sub">How often to remind you</div></div>
         <input type="number" class="num-input" id="inInterval" value="29" min="5" max="120">
+      </div>
+      <div class="setting-row">
+        <div><div class="sr-label">Break duration (minutes)</div><div class="sr-sub">How long to stand up</div></div>
+        <input type="number" class="num-input" id="inBreakDur" value="5" min="1" max="30">
       </div>
       <div class="setting-row">
         <div><div class="sr-label">Session Transition</div><div class="sr-sub">Full-screen flash on change</div></div>
@@ -375,7 +388,7 @@ const SOUNDS = [
 // ═══════════════════════════════════════
 let state = {
   sessions: [],
-  prefs: { breakOn:true, transOn:true, interval:29, soundId:'cal' },
+  prefs: { breakOn:true, transOn:true, interval:29, breakDur:5, soundId:'cal', tzOffset:8 },
   addColor: COLORS[0],
   editColor: COLORS[0],
   editIdx: -1,
@@ -397,39 +410,89 @@ function load() {
   } catch(e){}
   if (!state.sessions.length) {
     state.sessions = [
-      {start:'09:00',end:'11:30',label:'IELTS Time', color:'#C87AE8'},
-      {start:'11:30',end:'12:00',label:'Break',       color:'#7AE8A4'},
-      {start:'12:00',end:'14:00',label:'Work Time',   color:'#C8B87A'},
-      {start:'14:00',end:'14:30',label:'Lunch',       color:'#E8A07A'},
-      {start:'14:30',end:'17:30',label:'Deep Work',   color:'#7AB4E8'},
-      {start:'17:30',end:'18:00',label:'Wind Down',   color:'#B0B0B0'},
+      {start:'09:00',end:'11:30',label:'IELTS Time', color:'#C87AE8', },
+      {start:'11:30',end:'12:00',label:'Break',       color:'#7AE8A4', },
+      {start:'12:00',end:'14:00',label:'Work Time',   color:'#C8B87A', },
+      {start:'14:00',end:'14:30',label:'Lunch',       color:'#E8A07A', },
+      {start:'14:30',end:'17:30',label:'Deep Work',   color:'#7AB4E8', },
+      {start:'17:30',end:'18:00',label:'Wind Down',   color:'#B0B0B0', },
     ];
   }
 }
 
 // ═══════════════════════════════════════
-// UTC+8 TIME
+// TIMEZONE-AWARE TIME
 // ═══════════════════════════════════════
-function bjDate() {
+function tzDate() {
   const now = new Date();
-  return new Date(now.getTime() + (8*3600 + now.getTimezoneOffset()*60)*1000);
+  return new Date(now.getTime() + (state.prefs.tzOffset*3600 + now.getTimezoneOffset()*60)*1000);
 }
-function bjMins() { const d=bjDate(); return d.getHours()*60+d.getMinutes(); }
-function bjSecs() { const d=bjDate(); return d.getHours()*3600+d.getMinutes()*60+d.getSeconds(); }
+function tzMins() { const d=tzDate(); return d.getHours()*60+d.getMinutes(); }
+function tzSecs() { const d=tzDate(); return d.getHours()*3600+d.getMinutes()*60+d.getSeconds(); }
 function t2m(t) { const [h,m]=t.split(':').map(Number); return h*60+m; }
 function pad2(n) { return String(n).padStart(2,'0'); }
 function fmtTime(t) { const [h,m]=t.split(':').map(Number); return `${pad2(h)}:${pad2(m)}`; }
 function fmtRange(s,e) { return `${fmtTime(s)}  —  ${fmtTime(e)}`; }
 
+// Timezone list
+const TIMEZONES = [
+  { label:'UTC−12  Baker Island',      offset:-12 },
+  { label:'UTC−11  Samoa',             offset:-11 },
+  { label:'UTC−10  Hawaii',            offset:-10 },
+  { label:'UTC−9   Alaska',            offset:-9  },
+  { label:'UTC−8   Los Angeles / PST', offset:-8  },
+  { label:'UTC−7   Denver / MST',      offset:-7  },
+  { label:'UTC−6   Chicago / CST',     offset:-6  },
+  { label:'UTC−5   New York / EST',    offset:-5  },
+  { label:'UTC−4   Atlantic / AST',    offset:-4  },
+  { label:'UTC−3   São Paulo',         offset:-3  },
+  { label:'UTC−2   Mid-Atlantic',      offset:-2  },
+  { label:'UTC−1   Azores',            offset:-1  },
+  { label:'UTC+0   London / GMT',      offset:0   },
+  { label:'UTC+1   Paris / CET',       offset:1   },
+  { label:'UTC+2   Cairo / EET',       offset:2   },
+  { label:'UTC+3   Moscow / Istanbul', offset:3   },
+  { label:'UTC+4   Dubai / GST',       offset:4   },
+  { label:'UTC+5   Karachi / PKT',     offset:5   },
+  { label:'UTC+5:30  Mumbai / IST',    offset:5.5 },
+  { label:'UTC+6   Dhaka / BST',       offset:6   },
+  { label:'UTC+7   Bangkok / ICT',     offset:7   },
+  { label:'UTC+8   Beijing / SGT',     offset:8   },
+  { label:'UTC+9   Tokyo / JST',       offset:9   },
+  { label:'UTC+10  Sydney / AEST',     offset:10  },
+  { label:'UTC+11  Solomon Islands',   offset:11  },
+  { label:'UTC+12  Auckland / NZST',   offset:12  },
+];
+
+function populateTzSelect() {
+  const sel = document.getElementById('tzSelect');
+  if (!sel) return;
+  sel.innerHTML = '';
+  TIMEZONES.forEach(tz => {
+    const opt = document.createElement('option');
+    opt.value = tz.offset;
+    opt.textContent = tz.label;
+    if (tz.offset === state.prefs.tzOffset) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function saveTz() {
+  const sel = document.getElementById('tzSelect');
+  state.prefs.tzOffset = parseFloat(sel.value);
+  save();
+  showToast('Timezone saved');
+}
+
 // ═══════════════════════════════════════
 // SESSION HELPERS
 // ═══════════════════════════════════════
 function activeSession() {
-  const now = bjMins();
+  const now = tzMins();
   return state.sessions.find(s=>now>=t2m(s.start)&&now<t2m(s.end));
 }
 function nextSession() {
-  const now = bjMins();
+  const now = tzMins();
   return state.sessions.filter(s=>t2m(s.start)>now).sort((a,b)=>t2m(a.start)-t2m(b.start))[0];
 }
 
@@ -535,14 +598,14 @@ let prevLabel = '';
 let prevColor = '';
 
 function tick() {
-  const bj = bjDate();
+  const bj = tzDate();
   const active = activeSession();
   const next   = nextSession();
 
   // Countdown / clock
   const cdEl = document.getElementById('countdown');
   if (active) {
-    const rem = Math.max(0, t2m(active.end)*60 - bjSecs());
+    const rem = Math.max(0, t2m(active.end)*60 - tzSecs());
     const hh  = Math.floor(rem/3600);
     const mm  = Math.floor((rem%3600)/60);
     const ss  = rem%60;
@@ -597,12 +660,13 @@ function tick() {
   }
   prevColor = color;
 
-  // Break reminder
+  // Break reminder — triggers during any active session
   if (state.prefs.breakOn && active) {
     if (Date.now() - state.lastBreakTime >= state.prefs.interval*60000) {
       state.lastBreakTime = Date.now();
       playSound(state.prefs.soundId);
       document.getElementById('break-overlay').classList.add('show');
+      startBreakCountdown();
       if (navigator.vibrate) navigator.vibrate([300,150,300]);
     }
   }
@@ -613,7 +677,31 @@ function setAmbient(color) {
   document.getElementById('o2').style.background = color;
 }
 
+let _breakTimer = null;
+let _breakRemaining = 0;
+
+function startBreakCountdown() {
+  _breakRemaining = (state.prefs.breakDur || 5) * 60;
+  updateBreakCountdownDisplay();
+  clearInterval(_breakTimer);
+  _breakTimer = setInterval(() => {
+    _breakRemaining--;
+    updateBreakCountdownDisplay();
+    if (_breakRemaining <= 0) {
+      dismissBreak();
+    }
+  }, 1000);
+}
+
+function updateBreakCountdownDisplay() {
+  const mm = Math.floor(_breakRemaining / 60);
+  const ss = _breakRemaining % 60;
+  const el = document.getElementById('break-countdown');
+  if (el) el.textContent = `${pad2(mm)}:${pad2(ss)}`;
+}
+
 function dismissBreak() {
+  clearInterval(_breakTimer);
   state.lastBreakTime = Date.now();
   document.getElementById('break-overlay').classList.remove('show');
 }
@@ -624,14 +712,17 @@ function dismissBreak() {
 function openSettings() {
   renderSessionList();
   renderSoundList();
+  populateTzSelect();
   renderColorRow('addColorRow', state.addColor, c=>{state.addColor=c; renderColorRow('addColorRow',c,arguments.callee);});
   document.getElementById('inInterval').value = state.prefs.interval;
+  document.getElementById('inBreakDur').value = state.prefs.breakDur || 5;
   syncToggles();
   document.getElementById('settings').classList.add('open');
 }
 
 function closeSettings() {
   state.prefs.interval = parseInt(document.getElementById('inInterval').value)||29;
+  state.prefs.breakDur = parseInt(document.getElementById('inBreakDur').value)||5;
   save();
   document.getElementById('settings').classList.remove('open');
 }
@@ -770,12 +861,45 @@ function showToast(msg) {
 }
 
 // ═══════════════════════════════════════
-// WAKE LOCK
+// WAKE LOCK — silent video trick (most reliable on iOS Safari PWA)
 // ═══════════════════════════════════════
-async function wakeLock() {
-  try { if('wakeLock' in navigator) await navigator.wakeLock.request('screen'); } catch(e){}
+function initWakeLock() {
+  // Method 1: WakeLock API (works on some iOS versions)
+  async function requestWakeLock() {
+    try {
+      if ('wakeLock' in navigator) {
+        await navigator.wakeLock.request('screen');
+      }
+    } catch(e) {}
+  }
+
+  // Method 2: Silent looping video (most reliable on iOS — same trick as video playback)
+  function startSilentVideo() {
+    // 1x1 transparent MP4 encoded as base64 — tiny, silent, loops forever
+    const silentMp4 = 'data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAA5ttZGF0AAACrAYF//+o3EXpvebZSLeWLNgg2SPu73gyNjQgLSBjb3JlIDE1NSByMjkwMSA3ZDBmZjIyIC0gSC4yNjQvTVBFRy00IEFWQyBjb2RlYyAtIENvcHlsZWZ0IDIwMDMtMjAxOCAtIGh0dHA6Ly93d3cudmlkZW9sYW4ub3JnL3gyNjQuaHRtbCAtIG9wdGlvbnM6IGNhYmFjPTEgcmVmPTMgZGVibG9jaz0xOjA6MCBhbmFseXNlPTB4MzoweDExMyBtZT1oZXggc3VibWU9NyBwc3k9MSBwc3lfcmQ9MS4wMDowLjAwIG1peGVkX3JlZj0xIG1lX3JhbmdlPTE2IGNocm9tYV9tZT0xIHRyZWxsaXM9MSA4eDhkY3Q9MSBjcW09MCBkZWFkem9uZT0yMSwxMSBmYXN0X3Bza2lwPTEgY2hyb21hX3FwX29mZnNldD0tMiB0aHJlYWRzPTMgbG9va2FoZWFkX3RocmVhZHM9MSBzbGljZWRfdGhyZWFkcz0wIG5yPTAgZGVjaW1hdGU9MSBpbnRlcmxhY2VkPTAgYmx1cmF5X2NvbXBhdD0wIGNvbnN0cmFpbmVkX2ludHJhPTAgYmZyYW1lcz0zIGJfcHlyYW1pZD0yIGJfYWRhcHQ9MSBiX2JpYXM9MCBkaXJlY3Q9MSB3ZWlnaHRiPTEgb3Blbl9nb3A9MCB3ZWlnaHRwPTIga2V5aW50PTI1MCBrZXlpbnRfbWluPTEwIHNjZW5lY3V0PTQwIGludHJhX3JlZnJlc2g9MCByY19sb29rYWhlYWQ9NDAgcmM9Y3JmIG1idHJlZT0xIGNyZj0yMy4wIHFjb21wPTAuNjAgcXBtaW49MCBxcG1heD02OSBxcHN0ZXA9NCBpcF9yYXRpbz0xLjQwIGFxPTE6MS4wMACAAAABZWxpYnJhcnkgaW50ZXJuYWwgY29kZWMgAAAAD2ZyYWNTY2FsZQAAAABmcmVxAAAAAlNhbXBsZXMAAAAA';
+
+    const vid = document.createElement('video');
+    vid.setAttribute('loop', '');
+    vid.setAttribute('playsinline', '');
+    vid.setAttribute('muted', '');
+    vid.setAttribute('autoplay', '');
+    vid.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0.01;pointer-events:none;top:0;left:0;z-index:-1;';
+    vid.src = silentMp4;
+    document.body.appendChild(vid);
+    vid.play().catch(()=>{});
+
+    // Re-play on visibility change (iOS pauses video when returning to app)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        vid.play().catch(()=>{});
+        requestWakeLock();
+      }
+    });
+  }
+
+  requestWakeLock();
+  startSilentVideo();
 }
-document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') wakeLock(); });
 
 // ═══════════════════════════════════════
 // INIT
@@ -796,7 +920,7 @@ if (initActive) {
 
 tick();
 setInterval(tick, 1000);
-wakeLock();
+initWakeLock();
 </script>
 </body>
 </html>
