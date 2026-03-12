@@ -776,6 +776,7 @@ function startBreakCountdown() {
     _breakRemaining--;
     updateBreakCountdownDisplay();
     if (_breakRemaining <= 0) {
+      playSound(state.prefs.soundId);
       dismissBreak();
     }
   }, 1000);
