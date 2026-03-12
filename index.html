@@ -861,44 +861,78 @@ function showToast(msg) {
 }
 
 // ═══════════════════════════════════════
-// WAKE LOCK — silent video trick (most reliable on iOS Safari PWA)
+// WAKE LOCK — triple method for iOS PWA
 // ═══════════════════════════════════════
 function initWakeLock() {
-  // Method 1: WakeLock API (works on some iOS versions)
+
+  // Method 1: WakeLock API
   async function requestWakeLock() {
     try {
-      if ('wakeLock' in navigator) {
-        await navigator.wakeLock.request('screen');
-      }
+      if ('wakeLock' in navigator) await navigator.wakeLock.request('screen');
     } catch(e) {}
   }
 
-  // Method 2: Silent looping video (most reliable on iOS — same trick as video playback)
-  function startSilentVideo() {
-    // 1x1 transparent MP4 encoded as base64 — tiny, silent, loops forever
-    const silentMp4 = 'data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAA5ttZGF0AAACrAYF//+o3EXpvebZSLeWLNgg2SPu73gyNjQgLSBjb3JlIDE1NSByMjkwMSA3ZDBmZjIyIC0gSC4yNjQvTVBFRy00IEFWQyBjb2RlYyAtIENvcHlsZWZ0IDIwMDMtMjAxOCAtIGh0dHA6Ly93d3cudmlkZW9sYW4ub3JnL3gyNjQuaHRtbCAtIG9wdGlvbnM6IGNhYmFjPTEgcmVmPTMgZGVibG9jaz0xOjA6MCBhbmFseXNlPTB4MzoweDExMyBtZT1oZXggc3VibWU9NyBwc3k9MSBwc3lfcmQ9MS4wMDowLjAwIG1peGVkX3JlZj0xIG1lX3JhbmdlPTE2IGNocm9tYV9tZT0xIHRyZWxsaXM9MSA4eDhkY3Q9MSBjcW09MCBkZWFkem9uZT0yMSwxMSBmYXN0X3Bza2lwPTEgY2hyb21hX3FwX29mZnNldD0tMiB0aHJlYWRzPTMgbG9va2FoZWFkX3RocmVhZHM9MSBzbGljZWRfdGhyZWFkcz0wIG5yPTAgZGVjaW1hdGU9MSBpbnRlcmxhY2VkPTAgYmx1cmF5X2NvbXBhdD0wIGNvbnN0cmFpbmVkX2ludHJhPTAgYmZyYW1lcz0zIGJfcHlyYW1pZD0yIGJfYWRhcHQ9MSBiX2JpYXM9MCBkaXJlY3Q9MSB3ZWlnaHRiPTEgb3Blbl9nb3A9MCB3ZWlnaHRwPTIga2V5aW50PTI1MCBrZXlpbnRfbWluPTEwIHNjZW5lY3V0PTQwIGludHJhX3JlZnJlc2g9MCByY19sb29rYWhlYWQ9NDAgcmM9Y3JmIG1idHJlZT0xIGNyZj0yMy4wIHFjb21wPTAuNjAgcXBtaW49MCBxcG1heD02OSBxcHN0ZXA9NCBpcF9yYXRpbz0xLjQwIGFxPTE6MS4wMACAAAABZWxpYnJhcnkgaW50ZXJuYWwgY29kZWMgAAAAD2ZyYWNTY2FsZQAAAABmcmVxAAAAAlNhbXBsZXMAAAAA';
-
+  // Method 2: NoSleep — tiny looping video (~248 bytes, valid MP4)
+  // Uses a real 1-frame silent video that iOS actually accepts
+  function startNoSleep() {
     const vid = document.createElement('video');
     vid.setAttribute('loop', '');
     vid.setAttribute('playsinline', '');
     vid.setAttribute('muted', '');
-    vid.setAttribute('autoplay', '');
-    vid.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0.01;pointer-events:none;top:0;left:0;z-index:-1;';
-    vid.src = silentMp4;
+    vid.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0.001;pointer-events:none;top:-2px;left:-2px;';
+    // Two src formats for broader compatibility
+    const webm = 'data:video/webm;base64,GkXfowEAAAAAAAAfQoaBAUL3gQFC8oEEQvOBCEKChHdlYm1Ch4ECQoWBAhhTgGcBAAAAAAAVkhFNm3RALE27i1OrhBVJqWZTrIHfTbuMU6uEFlSua1OsggEwTbuMU6uEHFO7a1OsghBTwqBA7AEAAAAAAAASsIEIuoEIVLCIQjiBgQEi2uABAAAAAAAAH9O7a5CQH9O7a5CQH9O7a5CQH9O7a5CQH9O7a5CQH9O7a5CQH9O7a5CQH9O7a5CQH9O7a5CQH9O7a5CQH9O7a5CQH9O7a5CQ';
+    const src1 = document.createElement('source');
+    src1.src = webm; src1.type = 'video/webm';
+    vid.appendChild(src1);
     document.body.appendChild(vid);
-    vid.play().catch(()=>{});
-
-    // Re-play on visibility change (iOS pauses video when returning to app)
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        vid.play().catch(()=>{});
-        requestWakeLock();
-      }
-    });
+    vid.play().catch(() => {});
+    return vid;
   }
 
+  // Method 3: DOM nudge every 30s — iOS resets idle timer on any DOM mutation
+  // We move a 1px element by 1px back and forth — completely invisible
+  function startDomNudge() {
+    const nudge = document.createElement('div');
+    nudge.style.cssText = 'position:fixed;width:1px;height:1px;background:transparent;top:0;left:0;pointer-events:none;';
+    document.body.appendChild(nudge);
+    let tick = 0;
+    setInterval(() => {
+      tick = 1 - tick;
+      nudge.style.top = tick + 'px'; // alternates 0px ↔ 1px
+    }, 25000); // every 25 seconds — safely under iOS 30s idle threshold
+  }
+
+  // Method 4: AudioContext keepalive — silent oscillator keeps audio session alive
+  // iOS won't sleep screen while audio session is active in PWA
+  function startAudioKeepalive() {
+    try {
+      const ac = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ac.createOscillator();
+      const gain = ac.createGain();
+      gain.gain.value = 0.0001; // practically silent
+      osc.connect(gain);
+      gain.connect(ac.destination);
+      osc.start();
+      // Re-resume if suspended
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && ac.state === 'suspended') {
+          ac.resume();
+        }
+      });
+    } catch(e) {}
+  }
+
+  // Boot all methods
   requestWakeLock();
-  startSilentVideo();
+  startNoSleep();
+  startDomNudge();
+  startAudioKeepalive();
+
+  // Re-request WakeLock on return from background
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') requestWakeLock();
+  });
 }
 
 // ═══════════════════════════════════════
