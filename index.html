@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="番茄钟">
-<title>pomodoro</title>
+<title>番茄钟</title>
 <style>
 :root {
   --bg: #0a0a0a;
@@ -356,17 +356,25 @@ html, body { width:100%; height:100%; background:var(--bg); color:var(--text); f
       </div>
       <div class="setting-row">
         <div><div class="sr-label">Break duration (minutes)</div><div class="sr-sub">How long to stand up</div></div>
-        <input type="number" class="num-input" id="inBreakDur" value="5" min="1" max="30">
+        <input type="number" class="num-input" id="inBreakDur" value="1" min="1" max="30">
       </div>
       <div class="setting-row">
         <div><div class="sr-label">Session Transition</div><div class="sr-sub">Full-screen flash on change</div></div>
         <div class="toggle on" id="tgl-trans" onclick="togglePref('transOn')"></div>
       </div>
     </div>
+
+    <div class="sp-sec">Reset</div>
+    <button id="resetBtn"
+      ontouchstart="startResetHold()" ontouchend="cancelResetHold()"
+      onclick="resetAll()" style="
+      width:100%;padding:14px;background:none;margin-bottom:8px;
+      border:1px solid rgba(232,122,122,0.2);border-radius:10px;
+      color:rgba(232,122,122,0.45);font-family:'Courier New',monospace;
+      font-size:11px;letter-spacing:0.15em;cursor:pointer;
+    ">↺ RESET ALL TO DEFAULT</button>
   </div>
 </div>
-
-<!-- EDIT MODAL -->
 <div class="modal-bg" id="edit-modal">
   <div class="modal">
     <div class="modal-title">Edit Session</div>
@@ -420,7 +428,7 @@ const SOUNDS = [
 // ═══════════════════════════════════════
 let state = {
   sessions: [],
-  prefs: { breakOn:true, transOn:true, interval:29, breakDur:5, soundId:'cal', tzOffset:8, ambientOn:false },
+  prefs: { breakOn:true, transOn:true, interval:29, breakDur:1, soundId:'cal', tzOffset:8, ambientOn:false },
   addColor: COLORS[0],
   editColor: COLORS[0],
   editIdx: -1,
@@ -442,12 +450,9 @@ function load() {
   } catch(e){}
   if (!state.sessions.length) {
     state.sessions = [
-      {start:'09:00',end:'11:30',label:'IELTS Time', color:'#C87AE8', },
-      {start:'11:30',end:'12:00',label:'Break',       color:'#7AE8A4', },
-      {start:'12:00',end:'14:00',label:'Work Time',   color:'#C8B87A', },
-      {start:'14:00',end:'14:30',label:'Lunch',       color:'#E8A07A', },
-      {start:'14:30',end:'17:30',label:'Deep Work',   color:'#7AB4E8', },
-      {start:'17:30',end:'18:00',label:'Wind Down',   color:'#B0B0B0', },
+      {start:'09:00',end:'12:00',label:'Work Time', color:'#7AB4E8', type:'focus'},
+      {start:'12:00',end:'13:00',label:'Lunch',      color:'#E8A07A', type:'break'},
+      {start:'13:00',end:'17:00',label:'Work Time', color:'#7AB4E8', type:'focus'},
     ];
   }
 }
@@ -899,29 +904,23 @@ function showToast(msg) {
 const ambient = {
   ctx: null, masterGain: null, nodes: [], running: false,
 
-  start() {
+  async start() {
     if (this.running) return;
+
+    // Create context
     this.ctx = new (window.AudioContext || window.webkitAudioContext)();
     const c = this.ctx;
+
+    // iOS requires explicit resume after creation
+    if (c.state === 'suspended') {
+      try { await c.resume(); } catch(e) {}
+    }
+
     const vol = parseFloat(document.getElementById('ambientVol')?.value || 0.35);
 
     this.masterGain = c.createGain();
-    this.masterGain.gain.setValueAtTime(0, c.currentTime);
-    this.masterGain.gain.setTargetAtTime(vol, c.currentTime, 2.0); // slow fade in
+    this.masterGain.gain.setValueAtTime(vol, c.currentTime);
     this.masterGain.connect(c.destination);
-
-    // ── Keepalive tone: 20 Hz sine at fixed low volume ──
-    // iOS only treats AudioContext as "active audio session" if there's
-    // real output — this guarantees it, completely inaudible to humans
-    const keepOsc = c.createOscillator();
-    keepOsc.type = 'sine';
-    keepOsc.frequency.value = 20; // sub-bass, below hearing threshold
-    const keepGain = c.createGain();
-    keepGain.gain.value = 0.02; // fixed, not affected by masterGain or LFO
-    keepOsc.connect(keepGain);
-    keepGain.connect(c.destination); // connect directly, bypasses mute/LFO
-    keepOsc.start();
-    this.nodes.push(keepOsc);
 
     // Reverb — 6s large room
     const revLen = c.sampleRate * 6;
@@ -932,76 +931,68 @@ const ambient = {
         d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / revLen, 1.6);
     }
     const conv = c.createConvolver(); conv.buffer = revBuf;
-    const revMix = c.createGain(); revMix.gain.value = 0.55;
+    const revMix = c.createGain(); revMix.gain.value = 0.5;
     conv.connect(revMix); revMix.connect(this.masterGain);
 
-    // Slow breathing LFO — ~8s per cycle
-    // Correct approach: LFO modulates a gain node, mixed with a constant offset
+    // Breathing LFO — 8s cycle, ±0.15 around base 0.8
     const lfo = c.createOscillator();
     lfo.type = 'sine'; lfo.frequency.value = 0.12;
-
-    // LFO output: -1 to +1, scaled to ±0.15
     const lfoAmt = c.createGain(); lfoAmt.gain.value = 0.15;
     lfo.connect(lfoAmt);
-
-    // Breathing gain: base 0.8, LFO adds ±0.15 → range 0.65~0.95, always positive
     const breathGain = c.createGain(); breathGain.gain.value = 0.8;
     lfoAmt.connect(breathGain.gain);
+    breathGain.connect(this.masterGain);
+    breathGain.connect(conv);
 
-    // Layer 1: Delta binaural 1 Hz (100 Hz left / 101 Hz right)
+    // Layer 1: Delta binaural — 100 Hz left / 101 Hz right = 1 Hz beat
     const merger = c.createChannelMerger(2);
     const binGain = c.createGain(); binGain.gain.value = 0.55;
-    merger.connect(binGain);
-    binGain.connect(breathGain);
+    merger.connect(binGain); binGain.connect(breathGain);
 
-    const leftOsc = c.createOscillator();
-    leftOsc.type = 'sine'; leftOsc.frequency.value = 100;
+    const leftOsc  = c.createOscillator();
     const rightOsc = c.createOscillator();
+    leftOsc.type  = 'sine'; leftOsc.frequency.value  = 100;
     rightOsc.type = 'sine'; rightOsc.frequency.value = 101;
     const gl = c.createGain(); gl.gain.value = 0.5;
     const gr = c.createGain(); gr.gain.value = 0.5;
     leftOsc.connect(gl);  gl.connect(merger, 0, 0);
     rightOsc.connect(gr); gr.connect(merger, 0, 1);
 
-    // Layer 2: Deep Drone 40 Hz + harmonics
+    // Layer 2: Deep Drone — 40 Hz + harmonics
     const droneGain = c.createGain(); droneGain.gain.value = 0.5;
-    const dFreqs = [40, 80, 120, 200];
-    const dVols  = [1.0, 0.45, 0.2, 0.07];
-    dFreqs.forEach((f, i) => {
-      const o = c.createOscillator();
-      o.type = 'sine'; o.frequency.value = f;
-      o.detune.value = (i % 2 === 0 ? 1 : -1) * i * 1.8;
-      const g = c.createGain(); g.gain.value = dVols[i];
+    droneGain.connect(breathGain);
+    [[40,1.0],[80,0.45],[120,0.2],[200,0.07]].forEach(([f,v], i) => {
+      const o = c.createOscillator(); o.type = 'sine';
+      o.frequency.value = f;
+      o.detune.value = (i%2===0?1:-1) * i * 1.8;
+      const g = c.createGain(); g.gain.value = v;
       o.connect(g); g.connect(droneGain);
       o.start(); this.nodes.push(o);
     });
-    // Sub 20 Hz body rumble
-    const subO = c.createOscillator();
-    subO.type = 'sine'; subO.frequency.value = 20;
-    const subG = c.createGain(); subG.gain.value = 0.25;
-    subO.connect(subG); subG.connect(droneGain);
-    subO.start(); this.nodes.push(subO);
 
-    droneGain.connect(breathGain);
-
-    // breathGain → reverb + master
-    breathGain.connect(this.masterGain);
-    breathGain.connect(conv);
-
+    // Start all
     leftOsc.start(); rightOsc.start(); lfo.start();
     this.nodes.push(leftOsc, rightOsc, lfo);
     this.running = true;
+
+    // Poll every 2s — if iOS suspended the context, resume it
+    this._keepalive = setInterval(async () => {
+      if (this.ctx && this.ctx.state === 'suspended') {
+        try { await this.ctx.resume(); } catch(e) {}
+      }
+    }, 2000);
   },
 
   stop() {
-    if (!this.running || !this.ctx) return;
+    if (!this.running) return;
+    clearInterval(this._keepalive);
     try {
-      this.masterGain.gain.setTargetAtTime(0, this.ctx.currentTime, 1.0);
+      this.masterGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.5);
       setTimeout(() => {
         this.nodes.forEach(n => { try { n.stop(); } catch(e){} });
         try { this.ctx.close(); } catch(e){}
         this.ctx = null; this.nodes = [];
-      }, 2500);
+      }, 1500);
     } catch(e){}
     this.running = false;
   },
@@ -1011,6 +1002,24 @@ const ambient = {
       this.masterGain.gain.setTargetAtTime(parseFloat(v), this.ctx.currentTime, 0.1);
   }
 };
+
+function resetAll() {
+  state.sessions = [
+    {start:'09:00',end:'12:00',label:'Work Time', color:'#7AB4E8', type:'focus'},
+    {start:'12:00',end:'13:00',label:'Lunch',      color:'#E8A07A', type:'break'},
+    {start:'13:00',end:'17:00',label:'Work Time',  color:'#7AB4E8', type:'focus'},
+  ];
+  state.prefs = { breakOn:true, transOn:true, interval:29, breakDur:1, soundId:'cal', tzOffset:8, ambientOn:false };
+  save();
+  renderSessionList();
+  syncToggles();
+  syncAmbientUI();
+  document.getElementById('inInterval').value = 29;
+  document.getElementById('inBreakDur').value = 1;
+  populateTzSelect();
+  if (ambient.running) ambient.stop();
+  showToast('Reset to default ✓');
+}
 
 function toggleAmbient() {
   state.prefs.ambientOn = !state.prefs.ambientOn;
