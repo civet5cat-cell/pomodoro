@@ -268,64 +268,64 @@ html, body { width:100%; height:100%; background:var(--bg); color:var(--text); f
 <div id="amb"><div class="orb o1" id="o1"></div><div class="orb o2" id="o2"></div></div>
 
 <div id="topbar">
-  <button class="btn-pill" onclick="openSettings()">⊹ 编辑日程</button>
+  <button class="btn-pill" onclick="openSettings()">⊹ Schedule</button>
 </div>
 
 <div id="main">
   <div id="countdown">--:--</div>
-  <div id="session-range">— 无日程 —</div>
+  <div id="session-range">— no session —</div>
   <div id="label-wrap"></div>
 </div>
 
 <div id="break-overlay">
   <div class="break-emoji">🧘</div>
-  <div class="break-title">起来活动一下</div>
-  <div class="break-sub">久坐伤身 · 站起来伸展一下吧</div>
-  <button class="btn-dismiss" onclick="dismissBreak()">好的，继续</button>
+  <div class="break-title">Time to Move</div>
+  <div class="break-sub">You've been sitting too long · Stand up & stretch</div>
+  <button class="btn-dismiss" onclick="dismissBreak()">Got it, back to work</button>
 </div>
 
 <div id="trans-overlay">
-  <div class="trans-sub">现在开始</div>
+  <div class="trans-sub">Starting now</div>
   <div class="trans-label" id="trans-label"></div>
 </div>
 
 <div id="settings">
   <div class="sp-head">
-    <div class="sp-title">日程管理</div>
+    <div class="sp-title">Schedule</div>
     <button class="btn-x" onclick="closeSettings()">×</button>
   </div>
   <div class="sp-body">
-    <div class="sp-sec">今日日程</div>
+    <div class="sp-sec">Sessions</div>
     <div id="session-list"></div>
 
-    <div class="sp-sec">添加时间段</div>
+    <div class="sp-sec">Add Session</div>
     <div class="add-form">
       <div class="f-row">
-        <div class="f-group"><div class="f-label">开始</div><input type="time" class="f-input" id="inStart" value="09:00"></div>
-        <div class="f-group"><div class="f-label">结束</div><input type="time" class="f-input" id="inEnd" value="10:00"></div>
+        <div class="f-group"><div class="f-label">Start</div><input type="time" class="f-input" id="inStart" value="09:00"></div>
+        <div class="f-group"><div class="f-label">End</div><input type="time" class="f-input" id="inEnd" value="10:00"></div>
       </div>
-      <div class="f-group"><div class="f-label">标签</div><input type="text" class="f-input" id="inLabel" placeholder="IELTS Time / Work Time…" maxlength="28"></div>
-      <div class="f-group"><div class="f-label">颜色</div><div class="color-row" id="addColorRow"></div></div>
-      <button class="btn-add" onclick="addSession()">+ 添加</button>
+      <div class="f-group"><div class="f-label">Label</div><input type="text" class="f-input" id="inLabel" placeholder="IELTS Time / Work Time…" maxlength="28"></div>
+      <div class="f-group"><div class="f-label">Color</div><div class="color-row" id="addColorRow"></div></div>
+      <button class="btn-add" onclick="addSession()">+ Add</button>
     </div>
 
-    <div class="sp-sec">切换 &amp; 提醒音效</div>
+    <div class="sp-sec">Sound</div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0 18px;">
       <div id="sound-list"></div>
     </div>
 
-    <div class="sp-sec">提醒设置</div>
+    <div class="sp-sec">Reminders</div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0 18px;">
       <div class="setting-row">
-        <div><div class="sr-label">起立提醒</div><div class="sr-sub">定时提醒起来活动</div></div>
+        <div><div class="sr-label">Stand Up Reminder</div><div class="sr-sub">Remind you to move regularly</div></div>
         <div class="toggle on" id="tgl-break" onclick="togglePref('breakOn')"></div>
       </div>
       <div class="setting-row">
-        <div><div class="sr-label">提醒间隔（分钟）</div></div>
+        <div><div class="sr-label">Interval (minutes)</div></div>
         <input type="number" class="num-input" id="inInterval" value="29" min="5" max="120">
       </div>
       <div class="setting-row">
-        <div><div class="sr-label">时间段切换提示</div><div class="sr-sub">切换时全屏提示</div></div>
+        <div><div class="sr-label">Session Transition</div><div class="sr-sub">Full-screen flash on change</div></div>
         <div class="toggle on" id="tgl-trans" onclick="togglePref('transOn')"></div>
       </div>
     </div>
@@ -335,16 +335,16 @@ html, body { width:100%; height:100%; background:var(--bg); color:var(--text); f
 <!-- EDIT MODAL -->
 <div class="modal-bg" id="edit-modal">
   <div class="modal">
-    <div class="modal-title">编辑时间段</div>
+    <div class="modal-title">Edit Session</div>
     <div class="f-row">
-      <div class="f-group"><div class="f-label">开始</div><input type="time" class="f-input" id="editStart"></div>
-      <div class="f-group"><div class="f-label">结束</div><input type="time" class="f-input" id="editEnd"></div>
+      <div class="f-group"><div class="f-label">Start</div><input type="time" class="f-input" id="editStart"></div>
+      <div class="f-group"><div class="f-label">End</div><input type="time" class="f-input" id="editEnd"></div>
     </div>
-    <div class="f-group"><div class="f-label">标签</div><input type="text" class="f-input" id="editLabel" maxlength="28"></div>
-    <div class="f-group"><div class="f-label">颜色</div><div class="color-row" id="editColorRow"></div></div>
+    <div class="f-group"><div class="f-label">Label</div><input type="text" class="f-input" id="editLabel" maxlength="28"></div>
+    <div class="f-group"><div class="f-label">Color</div><div class="color-row" id="editColorRow"></div></div>
     <div class="modal-actions">
-      <button class="btn-ghost" onclick="closeEditModal()">取消</button>
-      <button class="btn-add" onclick="saveEdit()">保存</button>
+      <button class="btn-ghost" onclick="closeEditModal()">Cancel</button>
+      <button class="btn-add" onclick="saveEdit()">Save</button>
     </div>
   </div>
 </div>
@@ -358,16 +358,16 @@ html, body { width:100%; height:100%; background:var(--bg); color:var(--text); f
 const COLORS = ['#C8B87A','#7AB4E8','#C87AE8','#7AE8A4','#E8A07A','#E87A7A','#7AE8D4','#E8E87A','#B0B0B0','#E87AB4'];
 
 const SOUNDS = [
-  { id:'none',    name:'无声',   desc:'静音',         freq:0,   type:'none' },
-  { id:'sms',     name:'消息',   desc:'短信提示音',   freq:523,  type:'ping',   dur:0.3 },
-  { id:'cal',     name:'日历',   desc:'日历提醒音',   freq:440,  type:'bowl',   dur:2.5 },
-  { id:'mail',    name:'邮件',   desc:'邮件发送音',   freq:880,  type:'ping',   dur:0.2 },
-  { id:'ding',    name:'叮',     desc:'清脆单音',     freq:1047, type:'ping',   dur:0.4 },
-  { id:'shutter', name:'相机',   desc:'快门声',       freq:200,  type:'click',  dur:0.05 },
-  { id:'chime',   name:'叮咚',   desc:'双音提示',     freq:659,  type:'chime',  dur:1.0 },
-  { id:'soft',    name:'轻柔',   desc:'柔和提示',     freq:330,  type:'soft',   dur:0.8 },
-  { id:'low',     name:'低音',   desc:'低沉提示',     freq:110,  type:'bowl',   dur:3.0 },
-  { id:'triple',  name:'三连音', desc:'上行三音',     freq:392,  type:'triple', dur:1.5 },
+  { id:'none',    name:'Silent',  desc:'No sound',         freq:0,   type:'none' },
+  { id:'sms',     name:'Message', desc:'SMS tone',         freq:523,  type:'ping',   dur:0.3 },
+  { id:'cal',     name:'Bowl',    desc:'Singing bowl',     freq:440,  type:'bowl',   dur:2.5 },
+  { id:'mail',    name:'Mail',    desc:'Send sound',       freq:880,  type:'ping',   dur:0.2 },
+  { id:'ding',    name:'Ding',    desc:'Crisp single tone',freq:1047, type:'ping',   dur:0.4 },
+  { id:'shutter', name:'Click',   desc:'Shutter click',   freq:200,  type:'click',  dur:0.05 },
+  { id:'chime',   name:'Chime',   desc:'Double tone',      freq:659,  type:'chime',  dur:1.0 },
+  { id:'soft',    name:'Soft',    desc:'Gentle tone',      freq:330,  type:'soft',   dur:0.8 },
+  { id:'low',     name:'Low',     desc:'Deep tone',        freq:110,  type:'bowl',   dur:3.0 },
+  { id:'triple',  name:'Triple',  desc:'Ascending tones',  freq:392,  type:'triple', dur:1.5 },
 ];
 
 // ═══════════════════════════════════════
@@ -560,9 +560,9 @@ function tick() {
     color = active.color;
     range = fmtRange(active.start, active.end);
   } else {
-    label = '休息一下~';
+    label = 'Rest a while~';
     color = '#888888';
-    range = next ? fmtRange(next.start, next.end) : '— 今日日程已完成 —';
+    range = next ? fmtRange(next.start, next.end) : '— all done for today —';
   }
 
   document.getElementById('session-range').textContent = range;
@@ -697,7 +697,7 @@ function renderSessionList() {
   const sorted = [...state.sessions].sort((a,b)=>t2m(a.start)-t2m(b.start));
   list.innerHTML = '';
   if (!sorted.length) {
-    list.innerHTML='<div style="color:var(--dim);font-size:12px;padding:16px 0;text-align:center;letter-spacing:0.1em;">暂无日程</div>';
+    list.innerHTML='<div style="color:var(--dim);font-size:12px;padding:16px 0;text-align:center;letter-spacing:0.1em;">No sessions yet</div>';
     return;
   }
   sorted.forEach(s => {
@@ -722,11 +722,11 @@ function addSession() {
   const start=document.getElementById('inStart').value;
   const end=document.getElementById('inEnd').value;
   const label=document.getElementById('inLabel').value.trim();
-  if (!start||!end||!label){showToast('请填写完整');return;}
-  if (t2m(start)>=t2m(end)){showToast('结束须晚于开始');return;}
+  if (!start||!end||!label){showToast('Please fill in all fields');return;}
+  if (t2m(start)>=t2m(end)){showToast('End must be after start');return;}
   state.sessions.push({start,end,label,color:state.addColor});
   document.getElementById('inLabel').value='';
-  save(); renderSessionList(); showToast('已添加：'+label);
+  save(); renderSessionList(); showToast('Added: '+label);
 }
 
 function deleteSession(idx) {
@@ -754,9 +754,9 @@ function saveEdit() {
   const start=document.getElementById('editStart').value;
   const end=document.getElementById('editEnd').value;
   const label=document.getElementById('editLabel').value.trim();
-  if (!start||!end||!label){showToast('请填写完整');return;}
+  if (!start||!end||!label){showToast('Please fill in all fields');return;}
   state.sessions[state.editIdx]={start,end,label,color:state.editColor};
-  save(); renderSessionList(); closeEditModal(); showToast('已保存');
+  save(); renderSessionList(); closeEditModal(); showToast('Saved');
 }
 
 // ═══════════════════════════════════════
@@ -784,14 +784,14 @@ load();
 const initActive = activeSession() || nextSession();
 if (initActive) {
   const color = activeSession() ? initActive.color : '#888888';
-  const label = activeSession() ? initActive.label : '休息一下~';
+  const label = activeSession() ? initActive.label : 'Rest a while~';
   setLabel(label, color);
   setAmbient(color);
   prevLabel = label;
   prevColor = color;
 } else {
-  setLabel('休息一下~','#888888');
-  prevLabel='休息一下~'; prevColor='#888888';
+  setLabel('Rest a while~','#888888');
+  prevLabel='Rest a while~'; prevColor='#888888';
 }
 
 tick();
