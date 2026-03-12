@@ -383,6 +383,17 @@ html, body { width:100%; height:100%; background:var(--bg); color:var(--text); f
   </div>
 </div>
 
+<div id="bg-warning" style="
+  display:none; position:fixed; bottom:32px; left:50%; transform:translateX(-50%);
+  background:rgba(20,16,10,0.95); border:1px solid rgba(200,184,122,0.4);
+  border-radius:12px; padding:14px 20px; z-index:999;
+  font-family:'Courier New',monospace; font-size:12px; color:rgba(237,232,224,0.7);
+  letter-spacing:0.08em; text-align:center; white-space:nowrap;
+  box-shadow:0 4px 24px rgba(0,0,0,0.5);
+">
+  ⚠ Audio paused in background · tap to resume
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -899,6 +910,19 @@ const ambient = {
     this.masterGain.gain.setTargetAtTime(vol, c.currentTime, 2.0); // slow fade in
     this.masterGain.connect(c.destination);
 
+    // ── Keepalive tone: 20 Hz sine at fixed low volume ──
+    // iOS only treats AudioContext as "active audio session" if there's
+    // real output — this guarantees it, completely inaudible to humans
+    const keepOsc = c.createOscillator();
+    keepOsc.type = 'sine';
+    keepOsc.frequency.value = 20; // sub-bass, below hearing threshold
+    const keepGain = c.createGain();
+    keepGain.gain.value = 0.02; // fixed, not affected by masterGain or LFO
+    keepOsc.connect(keepGain);
+    keepGain.connect(c.destination); // connect directly, bypasses mute/LFO
+    keepOsc.start();
+    this.nodes.push(keepOsc);
+
     // Reverb — 6s large room
     const revLen = c.sampleRate * 6;
     const revBuf = c.createBuffer(2, revLen, c.sampleRate);
@@ -1014,6 +1038,48 @@ function syncAmbientUI() {
     volRow.style.pointerEvents = on ? 'auto' : 'none';
   }
 }
+
+// ── Background / foreground handling ──
+function showBgWarning() {
+  if (!state.prefs.ambientOn) return;
+  const el = document.getElementById('bg-warning');
+  if (el) el.style.display = 'block';
+}
+function hideBgWarning() {
+  const el = document.getElementById('bg-warning');
+  if (el) el.style.display = 'none';
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    showBgWarning();
+  } else {
+    // Returned to foreground — resume AudioContext
+    if (ambient.running && ambient.ctx) {
+      ambient.ctx.resume().then(() => {
+        const vol = parseFloat(document.getElementById('ambientVol')?.value || 0.35);
+        if (ambient.masterGain)
+          ambient.masterGain.gain.setTargetAtTime(vol, ambient.ctx.currentTime, 0.5);
+      }).catch(() => {
+        // Context closed — restart from scratch
+        ambient.running = false;
+        ambient.nodes = [];
+        ambient.ctx = null;
+        ambient.start();
+      });
+    }
+    hideBgWarning();
+  }
+});
+
+// Tap anywhere on warning to explicitly resume
+document.getElementById('bg-warning').addEventListener('click', () => {
+  if (ambient.running && ambient.ctx) {
+    ambient.ctx.resume();
+  }
+  hideBgWarning();
+});
+
 // ═══════════════════════════════════════
 function initWakeLock() {
 
@@ -1061,12 +1127,13 @@ function initWakeLock() {
     try {
       const ac = new (window.AudioContext || window.webkitAudioContext)();
       const osc = ac.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = 20; // 20 Hz — below audible, but iOS sees it as real output
       const gain = ac.createGain();
-      gain.gain.value = 0.0001; // practically silent
+      gain.gain.value = 0.015; // low but not so low iOS ignores it
       osc.connect(gain);
       gain.connect(ac.destination);
       osc.start();
-      // Re-resume if suspended
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible' && ac.state === 'suspended') {
           ac.resume();
