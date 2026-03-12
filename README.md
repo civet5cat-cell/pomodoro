@@ -1,9 +1,8 @@
-# pomodoro
 # 🍅 Daily Schedule Timer
 
 A minimal, elegant daily schedule timer designed for iPad. Built as a single HTML file — no installation required.
 
-**Live:** [civet5cat-cell.github.io/pomodoro](https://civet5cat-cell.github.io/pomodoro)
+**Live:** [may2cat.github.io/pomodoro](https://may2cat.github.io/pomodoro)
 
 ---
 
