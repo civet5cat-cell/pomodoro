@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="番茄钟">
-<title>番茄钟</title>
+<title>pomodoro</title>
 <style>
 :root {
   --bg: #0a0a0a;
@@ -936,18 +936,23 @@ const ambient = {
     conv.connect(revMix); revMix.connect(this.masterGain);
 
     // Slow breathing LFO — ~8s per cycle
+    // Correct approach: LFO modulates a gain node, mixed with a constant offset
     const lfo = c.createOscillator();
     lfo.type = 'sine'; lfo.frequency.value = 0.12;
-    const lfoAmt = c.createGain(); lfoAmt.gain.value = 0.28;
+
+    // LFO output: -1 to +1, scaled to ±0.15
+    const lfoAmt = c.createGain(); lfoAmt.gain.value = 0.15;
     lfo.connect(lfoAmt);
 
-    // Layer 1: Delta binaural 1 Hz (100 Hz / 101 Hz)
+    // Breathing gain: base 0.8, LFO adds ±0.15 → range 0.65~0.95, always positive
+    const breathGain = c.createGain(); breathGain.gain.value = 0.8;
+    lfoAmt.connect(breathGain.gain);
+
+    // Layer 1: Delta binaural 1 Hz (100 Hz left / 101 Hz right)
     const merger = c.createChannelMerger(2);
     const binGain = c.createGain(); binGain.gain.value = 0.55;
-    lfoAmt.connect(binGain.gain);
     merger.connect(binGain);
-    binGain.connect(this.masterGain);
-    binGain.connect(conv);
+    binGain.connect(breathGain);
 
     const leftOsc = c.createOscillator();
     leftOsc.type = 'sine'; leftOsc.frequency.value = 100;
@@ -960,7 +965,6 @@ const ambient = {
 
     // Layer 2: Deep Drone 40 Hz + harmonics
     const droneGain = c.createGain(); droneGain.gain.value = 0.5;
-    lfoAmt.connect(droneGain.gain);
     const dFreqs = [40, 80, 120, 200];
     const dVols  = [1.0, 0.45, 0.2, 0.07];
     dFreqs.forEach((f, i) => {
@@ -974,12 +978,15 @@ const ambient = {
     // Sub 20 Hz body rumble
     const subO = c.createOscillator();
     subO.type = 'sine'; subO.frequency.value = 20;
-    const subG = c.createGain(); subG.gain.value = 0.3;
+    const subG = c.createGain(); subG.gain.value = 0.25;
     subO.connect(subG); subG.connect(droneGain);
     subO.start(); this.nodes.push(subO);
 
-    droneGain.connect(this.masterGain);
-    droneGain.connect(conv);
+    droneGain.connect(breathGain);
+
+    // breathGain → reverb + master
+    breathGain.connect(this.masterGain);
+    breathGain.connect(conv);
 
     leftOsc.start(); rightOsc.start(); lfo.start();
     this.nodes.push(leftOsc, rightOsc, lfo);
