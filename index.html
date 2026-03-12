@@ -205,6 +205,10 @@ html, body { width:100%; height:100%; background:var(--bg); color:var(--text); f
   font-size:13px; outline:none; width:60px; text-align:center; transition:border-color 0.2s;
 }
 .num-input:focus { border-color:var(--accent); }
+#ambientVol::-webkit-slider-thumb {
+  -webkit-appearance:none; width:14px; height:14px; border-radius:50%;
+  background:var(--accent); cursor:pointer;
+}
 
 /* Sound list */
 .sound-item {
@@ -323,6 +327,23 @@ html, body { width:100%; height:100%; background:var(--bg); color:var(--text); f
       </div>
     </div>
 
+    <div class="sp-sec">Ambient Sound</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0 18px;">
+      <div class="setting-row">
+        <div>
+          <div class="sr-label">Delta · Deep Drone</div>
+          <div class="sr-sub">1 Hz binaural + 40 Hz drone · also keeps screen on</div>
+        </div>
+        <div class="toggle" id="tgl-ambient" onclick="toggleAmbient()"></div>
+      </div>
+      <div class="setting-row" id="ambient-vol-row" style="opacity:0.4;pointer-events:none;">
+        <div><div class="sr-label">Volume</div></div>
+        <input type="range" id="ambientVol" min="0.01" max="1" step="0.01" value="0.35"
+          style="flex:1;margin:0 12px;-webkit-appearance:none;height:2px;background:rgba(237,232,224,0.2);border-radius:2px;outline:none;"
+          oninput="setAmbientVol(this.value)">
+      </div>
+    </div>
+
     <div class="sp-sec">Reminders</div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0 18px;">
       <div class="setting-row">
@@ -388,7 +409,7 @@ const SOUNDS = [
 // ═══════════════════════════════════════
 let state = {
   sessions: [],
-  prefs: { breakOn:true, transOn:true, interval:29, breakDur:5, soundId:'cal', tzOffset:8 },
+  prefs: { breakOn:true, transOn:true, interval:29, breakDur:5, soundId:'cal', tzOffset:8, ambientOn:false },
   addColor: COLORS[0],
   editColor: COLORS[0],
   editIdx: -1,
@@ -716,6 +737,7 @@ function openSettings() {
   renderColorRow('addColorRow', state.addColor, c=>{state.addColor=c; renderColorRow('addColorRow',c,arguments.callee);});
   document.getElementById('inInterval').value = state.prefs.interval;
   document.getElementById('inBreakDur').value = state.prefs.breakDur || 5;
+  syncAmbientUI();
   syncToggles();
   document.getElementById('settings').classList.add('open');
 }
@@ -861,7 +883,137 @@ function showToast(msg) {
 }
 
 // ═══════════════════════════════════════
-// WAKE LOCK — triple method for iOS PWA
+// AMBIENT SOUND — Delta · Deep Drone
+// ═══════════════════════════════════════
+const ambient = {
+  ctx: null, masterGain: null, nodes: [], running: false,
+
+  start() {
+    if (this.running) return;
+    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const c = this.ctx;
+    const vol = parseFloat(document.getElementById('ambientVol')?.value || 0.35);
+
+    this.masterGain = c.createGain();
+    this.masterGain.gain.setValueAtTime(0, c.currentTime);
+    this.masterGain.gain.setTargetAtTime(vol, c.currentTime, 2.0); // slow fade in
+    this.masterGain.connect(c.destination);
+
+    // Reverb — 6s large room
+    const revLen = c.sampleRate * 6;
+    const revBuf = c.createBuffer(2, revLen, c.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = revBuf.getChannelData(ch);
+      for (let i = 0; i < revLen; i++)
+        d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / revLen, 1.6);
+    }
+    const conv = c.createConvolver(); conv.buffer = revBuf;
+    const revMix = c.createGain(); revMix.gain.value = 0.55;
+    conv.connect(revMix); revMix.connect(this.masterGain);
+
+    // Slow breathing LFO — ~8s per cycle
+    const lfo = c.createOscillator();
+    lfo.type = 'sine'; lfo.frequency.value = 0.12;
+    const lfoAmt = c.createGain(); lfoAmt.gain.value = 0.28;
+    lfo.connect(lfoAmt);
+
+    // Layer 1: Delta binaural 1 Hz (100 Hz / 101 Hz)
+    const merger = c.createChannelMerger(2);
+    const binGain = c.createGain(); binGain.gain.value = 0.55;
+    lfoAmt.connect(binGain.gain);
+    merger.connect(binGain);
+    binGain.connect(this.masterGain);
+    binGain.connect(conv);
+
+    const leftOsc = c.createOscillator();
+    leftOsc.type = 'sine'; leftOsc.frequency.value = 100;
+    const rightOsc = c.createOscillator();
+    rightOsc.type = 'sine'; rightOsc.frequency.value = 101;
+    const gl = c.createGain(); gl.gain.value = 0.5;
+    const gr = c.createGain(); gr.gain.value = 0.5;
+    leftOsc.connect(gl);  gl.connect(merger, 0, 0);
+    rightOsc.connect(gr); gr.connect(merger, 0, 1);
+
+    // Layer 2: Deep Drone 40 Hz + harmonics
+    const droneGain = c.createGain(); droneGain.gain.value = 0.5;
+    lfoAmt.connect(droneGain.gain);
+    const dFreqs = [40, 80, 120, 200];
+    const dVols  = [1.0, 0.45, 0.2, 0.07];
+    dFreqs.forEach((f, i) => {
+      const o = c.createOscillator();
+      o.type = 'sine'; o.frequency.value = f;
+      o.detune.value = (i % 2 === 0 ? 1 : -1) * i * 1.8;
+      const g = c.createGain(); g.gain.value = dVols[i];
+      o.connect(g); g.connect(droneGain);
+      o.start(); this.nodes.push(o);
+    });
+    // Sub 20 Hz body rumble
+    const subO = c.createOscillator();
+    subO.type = 'sine'; subO.frequency.value = 20;
+    const subG = c.createGain(); subG.gain.value = 0.3;
+    subO.connect(subG); subG.connect(droneGain);
+    subO.start(); this.nodes.push(subO);
+
+    droneGain.connect(this.masterGain);
+    droneGain.connect(conv);
+
+    leftOsc.start(); rightOsc.start(); lfo.start();
+    this.nodes.push(leftOsc, rightOsc, lfo);
+    this.running = true;
+  },
+
+  stop() {
+    if (!this.running || !this.ctx) return;
+    try {
+      this.masterGain.gain.setTargetAtTime(0, this.ctx.currentTime, 1.0);
+      setTimeout(() => {
+        this.nodes.forEach(n => { try { n.stop(); } catch(e){} });
+        try { this.ctx.close(); } catch(e){}
+        this.ctx = null; this.nodes = [];
+      }, 2500);
+    } catch(e){}
+    this.running = false;
+  },
+
+  setVol(v) {
+    if (this.masterGain && this.ctx)
+      this.masterGain.gain.setTargetAtTime(parseFloat(v), this.ctx.currentTime, 0.1);
+  }
+};
+
+function toggleAmbient() {
+  state.prefs.ambientOn = !state.prefs.ambientOn;
+  save();
+  const tgl = document.getElementById('tgl-ambient');
+  const volRow = document.getElementById('ambient-vol-row');
+  if (state.prefs.ambientOn) {
+    tgl.classList.add('on');
+    volRow.style.opacity = '1';
+    volRow.style.pointerEvents = 'auto';
+    ambient.start();
+  } else {
+    tgl.classList.remove('on');
+    volRow.style.opacity = '0.4';
+    volRow.style.pointerEvents = 'none';
+    ambient.stop();
+  }
+}
+
+function setAmbientVol(v) {
+  ambient.setVol(v);
+}
+
+function syncAmbientUI() {
+  const on = state.prefs.ambientOn;
+  const tgl = document.getElementById('tgl-ambient');
+  const volRow = document.getElementById('ambient-vol-row');
+  if (!tgl) return;
+  tgl.classList.toggle('on', !!on);
+  if (volRow) {
+    volRow.style.opacity = on ? '1' : '0.4';
+    volRow.style.pointerEvents = on ? 'auto' : 'none';
+  }
+}
 // ═══════════════════════════════════════
 function initWakeLock() {
 
@@ -954,6 +1106,17 @@ if (initActive) {
 
 tick();
 setInterval(tick, 1000);
+// If ambient was on last session, restart it (requires a user gesture first on iOS)
+// We hook into first tap instead
+if (state.prefs.ambientOn) {
+  const startOnce = () => {
+    ambient.start();
+    document.removeEventListener('touchstart', startOnce);
+    document.removeEventListener('click', startOnce);
+  };
+  document.addEventListener('touchstart', startOnce, { once: true });
+  document.addEventListener('click', startOnce, { once: true });
+}
 initWakeLock();
 </script>
 </body>
