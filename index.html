@@ -40,9 +40,7 @@ body {
 
 /* ── AMBIENT ── */
 #amb { position:fixed; inset:0; pointer-events:none; z-index:0; background:#0a0a0a; }
-.orb { position:absolute; border-radius:50%; filter:blur(160px); opacity:0.06; transition:background 3s ease; }
-.o1 { width:80vw; height:80vw; top:-20vw; left:-20vw; }
-.o2 { width:55vw; height:55vw; bottom:-10vw; right:-10vw; }
+.orb { display:none; }
 
 /* ── MAIN ── */
 #main { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:10; }
@@ -292,7 +290,50 @@ body {
 }
 .preview-btn:hover { border-color:var(--accent); color:var(--accent); }
 
-/* ── EDIT MODAL ── */
+/* ── TIME PICKER ── */
+.time-picker {
+  display:flex; align-items:center; gap:4px;
+  background:var(--bg); border:1px solid var(--border); border-radius:7px; padding:6px 10px;
+}
+.tp-block { display:flex; flex-direction:column; align-items:center; gap:2px; }
+.tp-val {
+  font-family:'Courier New',monospace; font-size:18px; color:var(--text);
+  width:32px; text-align:center; line-height:1;
+}
+.tp-sep { font-size:18px; color:var(--dim); padding:0 2px; margin-top:10px; }
+.tp-btn {
+  background:none; border:none; color:var(--dim); cursor:pointer;
+  font-size:11px; padding:1px 6px; border-radius:4px; transition:color 0.15s;
+  line-height:1;
+}
+.tp-btn:hover { color:var(--accent); }
+
+/* ── LETTER KEYBOARD ── */
+.lkb-display {
+  font-family:'Courier New',monospace; font-size:15px; color:var(--text);
+  background:var(--bg); border:1px solid var(--border); border-radius:7px;
+  padding:8px 12px; margin-bottom:8px; min-height:36px; letter-spacing:0.08em;
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+}
+.lkb-text { flex:1; }
+.lkb-del {
+  background:none; border:1px solid var(--border); color:var(--dim);
+  padding:3px 8px; border-radius:5px; cursor:pointer; font-size:11px;
+  transition:all 0.15s; flex-shrink:0;
+}
+.lkb-del:hover { border-color:#e87a7a; color:#e87a7a; }
+.lkb-keys { display:flex; flex-wrap:wrap; gap:4px; }
+.lkb-key {
+  background:var(--surface); border:1px solid var(--border); color:var(--mid);
+  width:28px; height:28px; border-radius:5px; cursor:pointer; font-size:12px;
+  font-family:'Courier New',monospace; letter-spacing:0;
+  display:flex; align-items:center; justify-content:center;
+  transition:all 0.15s;
+}
+.lkb-key:hover { border-color:var(--accent); color:var(--accent); background:rgba(200,184,122,0.08); }
+.lkb-key.wide {
+  width:auto; padding:0 10px; font-size:10px; letter-spacing:0.08em; color:var(--dim);
+}
 .modal-bg {
   position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:200;
   display:flex; align-items:center; justify-content:center;
@@ -333,6 +374,7 @@ body {
 <body>
 
 <div id="amb"><div class="orb o1" id="o1"></div><div class="orb o2" id="o2"></div></div>
+<canvas id="snow" style="position:fixed;inset:0;pointer-events:none;z-index:1;opacity:0.55;"></canvas>
 
 <div id="topbar">
   <button class="btn-pill" onclick="openSettings()">⊹ Schedule</button>
@@ -374,10 +416,19 @@ body {
         <div class="sp-sec">Add Session</div>
         <div class="add-form">
           <div class="f-row">
-            <div class="f-group"><div class="f-label">Start</div><input type="time" class="f-input" id="inStart" value="09:00"></div>
-            <div class="f-group"><div class="f-label">End</div><input type="time" class="f-input" id="inEnd" value="10:00"></div>
+            <div class="f-group">
+              <div class="f-label">Start</div>
+              <div class="time-picker" id="addStartPicker"></div>
+            </div>
+            <div class="f-group">
+              <div class="f-label">End</div>
+              <div class="time-picker" id="addEndPicker"></div>
+            </div>
           </div>
-          <div class="f-group"><div class="f-label">Label</div><input type="text" class="f-input" id="inLabel" placeholder="IELTS / Work Time…" maxlength="28"></div>
+          <div class="f-group">
+            <div class="f-label">Label</div>
+            <div id="addLabelGrid"></div>
+          </div>
           <div class="f-group"><div class="f-label">Color</div><div class="color-row" id="addColorRow"></div></div>
           <button class="btn-add" onclick="addSession()">+ Add</button>
         </div>
@@ -387,7 +438,13 @@ body {
       <div class="sp-col">
         <div class="sp-sec">Notification Sound</div>
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0 14px;">
-          <div id="sound-list"></div>
+          <div class="setting-row">
+            <div><div class="sr-label">Sound</div></div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <button class="preview-btn" onclick="playSound(state.prefs.soundId)" title="Preview">▶</button>
+              <select class="f-input" id="soundSelect" style="width:auto;padding:6px 8px;font-size:12px;" onchange="selectSound(this.value)"></select>
+            </div>
+          </div>
         </div>
 
         <div class="sp-sec">Timezone</div>
@@ -401,19 +458,19 @@ body {
         <div class="sp-sec">Ambient Sound</div>
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0 14px;">
           <div class="setting-row">
-            <div><div class="sr-label">Ambient Sound</div><div class="sr-sub">Background while working</div></div>
-            <div class="toggle" id="tgl-ambient" onclick="toggleAmbient()"></div>
+            <div><div class="sr-label">Sound</div></div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <button class="preview-btn" id="amb-play-btn" onclick="toggleAmbientPlay()">▶</button>
+              <select class="f-input" id="ambSelect" style="width:auto;padding:6px 8px;font-size:12px;" onchange="selectAmbient(this.value)"></select>
+            </div>
           </div>
-          <div id="ambient-panel" style="display:none;padding-bottom:10px;">
-            <div class="amb-grid" id="amb-grid"></div>
-            <div class="amb-slider-row">
-              <span class="amb-slider-lbl">Volume</span>
-              <input type="range" id="ambientVol" min="0" max="1" step="0.01" value="0.5" oninput="ambientSetVol(this.value)">
-            </div>
-            <div class="amb-slider-row">
-              <span class="amb-slider-lbl">Breath</span>
-              <input type="range" id="ambientSpeed" min="0.02" max="0.3" step="0.01" value="0.06" oninput="ambientSetSpeed(this.value)">
-            </div>
+          <div class="amb-slider-row" id="amb-vol-row" style="padding:8px 0 4px;">
+            <span class="amb-slider-lbl">Volume</span>
+            <input type="range" id="ambientVol" min="0" max="1" step="0.01" value="0.5" oninput="ambientSetVol(this.value)">
+          </div>
+          <div class="amb-slider-row" id="amb-spd-row" style="padding:4px 0 10px;">
+            <span class="amb-slider-lbl">Breath</span>
+            <input type="range" id="ambientSpeed" min="0.02" max="0.3" step="0.01" value="0.06" oninput="ambientSetSpeed(this.value)">
           </div>
         </div>
 
@@ -437,15 +494,6 @@ body {
           </div>
         </div>
 
-        <div class="sp-sec">Reset</div>
-        <button id="resetBtn"
-          ontouchstart="startResetHold()" ontouchend="cancelResetHold()"
-          onclick="resetAll()" style="
-          width:100%;padding:12px;background:none;margin-bottom:8px;
-          border:1px solid rgba(232,122,122,0.2);border-radius:10px;
-          color:rgba(232,122,122,0.45);font-family:'Courier New',monospace;
-          font-size:11px;letter-spacing:0.15em;cursor:pointer;
-        ">↺ RESET ALL</button>
       </div>
 
     </div>
@@ -456,10 +504,13 @@ body {
   <div class="modal">
     <div class="modal-title">Edit Session</div>
     <div class="f-row">
-      <div class="f-group"><div class="f-label">Start</div><input type="time" class="f-input" id="editStart"></div>
-      <div class="f-group"><div class="f-label">End</div><input type="time" class="f-input" id="editEnd"></div>
+      <div class="f-group"><div class="f-label">Start</div><div class="time-picker" id="editStartPicker"></div></div>
+      <div class="f-group"><div class="f-label">End</div><div class="time-picker" id="editEndPicker"></div></div>
     </div>
-    <div class="f-group"><div class="f-label">Label</div><input type="text" class="f-input" id="editLabel" maxlength="28"></div>
+    <div class="f-group">
+      <div class="f-label">Label</div>
+      <div class="label-grid" id="editLabelGrid"></div>
+    </div>
     <div class="f-group"><div class="f-label">Color</div><div class="color-row" id="editColorRow"></div></div>
     <div class="modal-actions">
       <button class="btn-ghost" onclick="closeEditModal()">Cancel</button>
@@ -829,6 +880,9 @@ function openSettings() {
   renderSoundList();
   populateTzSelect();
   renderColorRow('addColorRow', state.addColor, c=>{state.addColor=c; renderColorRow('addColorRow',c,arguments.callee);});
+  makeTimePicker('addStartPicker', '09:00');
+  makeTimePicker('addEndPicker',   '10:00');
+  makeLabelGrid('addLabelGrid', '');
   document.getElementById('inInterval').value = state.prefs.interval;
   document.getElementById('inBreakDur').value = state.prefs.breakDur || 5;
   syncAmbientUI();
@@ -856,46 +910,22 @@ function togglePref(key) {
 // ═══════════════════════════════════════
 // SOUND LIST
 // ═══════════════════════════════════════
-let soundListOpen = false;
 function renderSoundList() {
-  const el = document.getElementById('sound-list');
-  el.innerHTML = '';
-  const cur = SOUNDS.find(x=>x.id===state.prefs.soundId) || SOUNDS[0];
+  const sel = document.getElementById('soundSelect');
+  if (!sel) return;
+  sel.innerHTML = '';
+  SOUNDS.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.name + (s.desc ? ' · ' + s.desc : '');
+    if (s.id === state.prefs.soundId) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
 
-  // Selected row (always visible)
-  const selRow = document.createElement('div');
-  selRow.className = 'sound-item';
-  selRow.style.cursor = 'pointer';
-  selRow.innerHTML = `
-    <div class="sound-item-left">
-      <div class="sound-name">${cur.name}</div>
-      <div class="sound-desc">${cur.desc}</div>
-    </div>
-    <div class="sound-right">
-      <span style="font-size:10px;color:var(--dim);letter-spacing:0.1em;">${soundListOpen?'▲':'▼'}</span>
-    </div>`;
-  selRow.onclick = () => { soundListOpen = !soundListOpen; renderSoundList(); };
-  el.appendChild(selRow);
-
-  // Dropdown options
-  if (soundListOpen) {
-    SOUNDS.forEach(s => {
-      if (s.id === cur.id) return;
-      const row = document.createElement('div');
-      row.className = 'sound-item';
-      row.style.cssText = 'border-top:1px solid var(--border);opacity:0.85;cursor:pointer;';
-      row.innerHTML = `
-        <div class="sound-item-left">
-          <div class="sound-name">${s.name}</div>
-          <div class="sound-desc">${s.desc}</div>
-        </div>
-        <div class="sound-right">
-          ${s.type!=='none'?`<button class="preview-btn" onclick="event.stopPropagation();playSound('${s.id}')">▶</button>`:''}
-        </div>`;
-      row.onclick = () => { state.prefs.soundId = s.id; soundListOpen = false; save(); renderSoundList(); };
-      el.appendChild(row);
-    });
-  }
+function selectSound(id) {
+  state.prefs.soundId = id;
+  save();
 }
 
 // ═══════════════════════════════════════
@@ -914,6 +944,104 @@ function renderColorRow(id, selected, onPick) {
   });
 }
 
+// ═══════════════════════════════════════
+// TIME PICKER (mouse only)
+// ═══════════════════════════════════════
+const PRESET_LABELS = []; // kept for compatibility
+
+function makeLabelGrid(containerId, selected) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el._val = selected || '';
+
+  const ROWS = ['ABCDEFGHIJ', 'KLMNOPQRST', 'UVWXYZ'];
+  const EXTRAS = [' ','1','2','3','4','5','6','7','8','9','0','Ø','.'];
+
+  function render() {
+    const display = el._val || '';
+    el.innerHTML = `
+      <div class="lkb-display">
+        <span class="lkb-text">${display || '<span style="color:var(--dim);font-size:12px;">Type a label…</span>'}</span>
+        <button class="lkb-del" onclick="lkbDel('${containerId}')">⌫</button>
+        <button class="lkb-del" onclick="lkbClear('${containerId}')" style="font-size:10px;">CLR</button>
+      </div>
+      <div class="lkb-keys">
+        ${ROWS.map(row => row.split('').map(ch =>
+          `<button class="lkb-key" onclick="lkbType('${containerId}','${ch}')">${ch}</button>`
+        ).join('')).join('')}
+        ${EXTRAS.map(ch =>
+          `<button class="lkb-key ${ch===' '?'wide':''}" onclick="lkbType('${containerId}','${ch}')">${ch===' '?'SPC':ch}</button>`
+        ).join('')}
+      </div>`;
+  }
+  el._render = render;
+  render();
+}
+
+function lkbType(id, ch) {
+  const el = document.getElementById(id);
+  if (!el || (el._val||'').length >= 24) return;
+  el._val = (el._val||'') + ch;
+  if (el._render) el._render();
+}
+function lkbDel(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el._val = (el._val||'').slice(0,-1);
+  if (el._render) el._render();
+}
+function lkbClear(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el._val = '';
+  if (el._render) el._render();
+}
+
+function labelVal(id) {
+  const el = document.getElementById(id);
+  return el ? (el._val || '') : '';
+}
+
+// ═══════════════════════════════════════
+// TIME PICKER (mouse only)
+// ═══════════════════════════════════════
+function makeTimePicker(containerId, initVal) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const [ih, im] = (initVal||'09:00').split(':').map(Number);
+  el._h = ih; el._m = im;
+  function render() {
+    el.innerHTML = `
+      <div class="tp-block">
+        <button class="tp-btn" onclick="tpStep('${containerId}','h',1)">▲</button>
+        <div class="tp-val">${pad2(el._h)}</div>
+        <button class="tp-btn" onclick="tpStep('${containerId}','h',-1)">▼</button>
+      </div>
+      <div class="tp-sep">:</div>
+      <div class="tp-block">
+        <button class="tp-btn" onclick="tpStep('${containerId}','m',1)">▲</button>
+        <div class="tp-val">${pad2(el._m)}</div>
+        <button class="tp-btn" onclick="tpStep('${containerId}','m',-1)">▼</button>
+      </div>`;
+  }
+  el._render = render;
+  render();
+}
+
+function tpStep(id, part, delta) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (part==='h') el._h = (el._h + delta + 24) % 24;
+  else el._m = Math.round((el._m + delta*5 + 60) % 60 / 5) * 5;
+  if (el._render) el._render();
+}
+
+function tpVal(id) {
+  const el = document.getElementById(id);
+  return el ? `${pad2(el._h||0)}:${pad2(el._m||0)}` : '00:00';
+}
+
+// ═══════════════════════════════════════
 // ═══════════════════════════════════════
 // SESSION CRUD
 // ═══════════════════════════════════════
@@ -944,13 +1072,12 @@ function renderSessionList() {
 }
 
 function addSession() {
-  const start=document.getElementById('inStart').value;
-  const end=document.getElementById('inEnd').value;
-  const label=document.getElementById('inLabel').value.trim();
-  if (!start||!end||!label){showToast('Please fill in all fields');return;}
+  const start = tpVal('addStartPicker');
+  const end   = tpVal('addEndPicker');
+  const label = labelVal('addLabelGrid');
+  if (!label){showToast('Please type a label');return;}
   if (t2m(start)>=t2m(end)){showToast('End must be after start');return;}
   state.sessions.push({start,end,label,color:state.addColor});
-  document.getElementById('inLabel').value='';
   save(); renderSessionList(); showToast('Added: '+label);
 }
 
@@ -961,9 +1088,9 @@ function deleteSession(idx) {
 function openEditModal(idx) {
   state.editIdx=idx;
   const s=state.sessions[idx];
-  document.getElementById('editStart').value=s.start;
-  document.getElementById('editEnd').value=s.end;
-  document.getElementById('editLabel').value=s.label;
+  makeTimePicker('editStartPicker', s.start);
+  makeTimePicker('editEndPicker',   s.end);
+  makeLabelGrid('editLabelGrid', s.label);
   state.editColor=s.color;
   renderColorRow('editColorRow',state.editColor,c=>{state.editColor=c;renderColorRow('editColorRow',c,arguments.callee);});
   document.getElementById('edit-modal').classList.add('open');
@@ -976,10 +1103,11 @@ function closeEditModal() {
 
 function saveEdit() {
   if (state.editIdx<0) return;
-  const start=document.getElementById('editStart').value;
-  const end=document.getElementById('editEnd').value;
-  const label=document.getElementById('editLabel').value.trim();
-  if (!start||!end||!label){showToast('Please fill in all fields');return;}
+  const start = tpVal('editStartPicker');
+  const end   = tpVal('editEndPicker');
+  const label = labelVal('editLabelGrid');
+  if (!label){showToast('Please type a label');return;}
+  if (t2m(start)>=t2m(end)){showToast('End must be after start');return;}
   state.sessions[state.editIdx]={start,end,label,color:state.editColor};
   save(); renderSessionList(); closeEditModal(); showToast('Saved');
 }
@@ -998,6 +1126,7 @@ function showToast(msg) {
 // AMBIENT SOUND ENGINE
 // ═══════════════════════════════════════
 const AMB_SOUNDS = [
+  { id:'none',  name:'Silent',         desc:'No ambient sound' },
   { id:'delta', name:'Delta · Deep Drone', desc:'1 Hz binaural + 40 Hz drone · deep reverb' },
   { id:'theta', name:'Theta Waves',        desc:'6 Hz binaural · meditation / creativity' },
   { id:'40hz',  name:'40 Hz Gamma',        desc:'40 Hz binaural · focus / cognition' },
@@ -1243,81 +1372,61 @@ function resetAll() {
   showToast('Reset to default ✓');
 }
 
-function toggleAmbient() {
-  state.prefs.ambientOn = !state.prefs.ambientOn;
-  save();
-  syncAmbientUI();
-  if (state.prefs.ambientOn) {
-    renderAmbGrid();
-    ambient.start();
-    ambient.startKeepalive();
-  } else {
-    ambient.stop();
-    ambient.stopKeepalive();
-  }
-}
+function toggleAmbient() { /* no longer used */ }
 
 function ambientSetVol(v) { /* handled by breath tick */ }
 function ambientSetSpeed(v) { /* handled by breath tick */ }
-// keep old name for visibilitychange handler
 function setAmbientVol(v) {}
 
-function syncAmbientUI() {
-  const on = state.prefs.ambientOn;
-  const tgl = document.getElementById('tgl-ambient');
-  const panel = document.getElementById('ambient-panel');
-  if (!tgl) return;
-  tgl.classList.toggle('on', !!on);
-  if (panel) panel.style.display = on ? 'block' : 'none';
-  if (on) renderAmbGrid();
+function populateAmbSelect() {
+  const sel = document.getElementById('ambSelect');
+  if (!sel) return;
+  sel.innerHTML = '';
+  AMB_SOUNDS.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.name;
+    const cur = state.prefs.ambientSoundId || 'none';
+    if (s.id === cur) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  updateAmbPlayBtn();
 }
 
-let ambListOpen = false;
-function renderAmbGrid() {
-  const grid = document.getElementById('amb-grid');
-  if (!grid) return;
-  grid.innerHTML = '';
-  const cur = AMB_SOUNDS.find(s=>s.id===ambient.currentId) || AMB_SOUNDS[0];
+function selectAmbient(id) {
+  state.prefs.ambientSoundId = id;
+  state.prefs.ambientOn = (id !== 'none');
+  save();
+  if (id === 'none') { ambient.stop(); ambient.stopKeepalive(); }
+  else { ambient.playSound(id); ambient.startKeepalive(); }
+  updateAmbPlayBtn();
+}
 
-  // Selected / playing row
-  const selBtn = document.createElement('button');
-  selBtn.className = 'amb-btn' + (ambient.currentId ? ' playing' : '');
-  selBtn.id = 'abtn-' + cur.id;
-  selBtn.innerHTML = `
-    <div class="amb-info">
-      <div class="amb-name">${cur.name}</div>
-      <div class="amb-desc">${cur.desc}</div>
-    </div>
-    <div style="display:flex;align-items:center;gap:8px;">
-      <div class="amb-icon">${ambient.currentId ? '■' : '▶'}</div>
-      <span style="font-size:10px;color:var(--dim);">${ambListOpen?'▲':'▼'}</span>
-    </div>`;
-  selBtn.onclick = () => { ambListOpen = !ambListOpen; renderAmbGrid(); };
-  grid.appendChild(selBtn);
-
-  // Dropdown options
-  if (ambListOpen) {
-    AMB_SOUNDS.forEach(s => {
-      if (s.id === cur.id) return;
-      const btn = document.createElement('button');
-      btn.className = 'amb-btn';
-      btn.id = 'abtn-' + s.id;
-      btn.style.marginTop = '4px';
-      btn.innerHTML = `
-        <div class="amb-info">
-          <div class="amb-name">${s.name}</div>
-          <div class="amb-desc">${s.desc}</div>
-        </div>
-        <div class="amb-icon">▶</div>`;
-      btn.onclick = () => {
-        ambient.playSound(s.id);
-        ambListOpen = false;
-        renderAmbGrid();
-      };
-      grid.appendChild(btn);
-    });
+function toggleAmbientPlay() {
+  if (ambient.running) { ambient.stop(); }
+  else {
+    const id = state.prefs.ambientSoundId || 'none';
+    if (id !== 'none') { ambient.start(); ambient.startKeepalive(); }
   }
+  updateAmbPlayBtn();
 }
+
+function updateAmbPlayBtn() {
+  const btn = document.getElementById('amb-play-btn');
+  if (!btn) return;
+  const id = state.prefs.ambientSoundId || 'none';
+  btn.textContent = ambient.running ? '■' : '▶';
+  btn.style.opacity = id === 'none' ? '0.3' : '1';
+  btn.style.pointerEvents = id === 'none' ? 'none' : 'auto';
+}
+
+function syncAmbientUI() {
+  const tgl = document.getElementById('tgl-ambient');
+  if (tgl) tgl.classList.toggle('on', !!state.prefs.ambientOn);
+  populateAmbSelect();
+}
+
+function renderAmbGrid() { syncAmbientUI(); }
 
 // ── Background / foreground handling ──
 function showBgWarning() {
@@ -1348,6 +1457,116 @@ document.getElementById('bg-warning').addEventListener('click', () => {
 });
 
 // ═══════════════════════════════════════
+// ═══════════════════════════════════════
+// SNOW
+// ═══════════════════════════════════════
+(function initSnow() {
+  const canvas = document.getElementById('snow');
+  const ctx = canvas.getContext('2d');
+  let W, H, flakes = [];
+
+  function resize() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  function drawSnowflakeOn(octx, cx, cy, r) {
+    octx.lineCap = 'round';
+    octx.lineJoin = 'round';
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2;
+      const ax = Math.cos(angle), ay = Math.sin(angle);
+      octx.beginPath();
+      octx.moveTo(cx, cy);
+      octx.lineTo(cx + ax * r, cy + ay * r);
+      octx.stroke();
+      const bx = cx + ax * r * 0.55, by = cy + ay * r * 0.55;
+      const bl = r * 0.30;
+      [angle + Math.PI/3, angle - Math.PI/3].forEach(a => {
+        octx.beginPath();
+        octx.moveTo(bx, by);
+        octx.lineTo(bx + Math.cos(a) * bl, by + Math.sin(a) * bl);
+        octx.stroke();
+      });
+    }
+  }
+
+  function makeFlakeDot(r, blur, opacity, lineWidth) {
+    const pad  = Math.ceil(blur * 2.5 + r + 4);
+    const size = Math.ceil(r * 2 + pad * 2);
+    const oc   = document.createElement('canvas');
+    oc.width = oc.height = size;
+    const ox = oc.getContext('2d');
+    if (blur > 0.8) ox.filter = 'blur(' + blur.toFixed(1) + 'px)';
+    ox.lineWidth   = lineWidth;
+    ox.strokeStyle = 'rgba(237,232,224,1)';
+    ox.globalAlpha = opacity;
+    drawSnowflakeOn(ox, size/2, size/2, r);
+    return { canvas: oc, half: size/2 };
+  }
+
+  const COUNT = 48;
+  for (let i = 0; i < COUNT; i++) {
+    const z      = Math.random();
+    const depthT = Math.abs(z - 0.5) * 2;
+    const r = z < 0.5
+      ? 4  + z * 10
+      : 9  + Math.pow((z - 0.5) * 2, 1.6) * 22;
+    const blur = z > 0.5
+      ? Math.pow((z - 0.5) * 2, 1.2) * 10
+      : depthT * 1.8;
+    const opacity = z > 0.5
+      ? 0.08 + (1 - (z - 0.5) * 2) * 0.28
+      : 0.22 + (1 - depthT) * 0.50;
+    const lineWidth = r * (z > 0.6 ? 0.22 : z < 0.3 ? 0.10 : 0.15);
+    const flake = {
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      z, r, blur, opacity, lineWidth,
+      speed: (0.14 + z * 0.52) * 0.75,
+      drift: (Math.random() - 0.5) * 0.20,
+      rot:   Math.random() * Math.PI * 2,
+      rotSpeed: (Math.random() - 0.5) * 0.004,
+      wobble:      Math.random() * Math.PI * 2,
+      wobbleSpeed: 0.004 + Math.random() * 0.006,
+    };
+    if (blur > 0.8) flake.dot = makeFlakeDot(r, blur, opacity, lineWidth);
+    flakes.push(flake);
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    flakes.sort((a, b) => a.z - b.z);
+    flakes.forEach(f => {
+      f.wobble += f.wobbleSpeed;
+      f.rot    += f.rotSpeed;
+      f.x += f.drift + Math.sin(f.wobble) * 0.22;
+      f.y += f.speed;
+      if (f.y > H + 40) { f.y = -40; f.x = Math.random() * W; }
+      if (f.x > W + 40) f.x = -40;
+      if (f.x < -40)    f.x = W + 40;
+
+      ctx.save();
+      ctx.translate(f.x, f.y);
+      ctx.rotate(f.rot);
+      if (f.dot) {
+        ctx.drawImage(f.dot.canvas, -f.dot.half, -f.dot.half);
+      } else {
+        ctx.lineWidth   = f.lineWidth;
+        ctx.strokeStyle = 'rgba(237,232,224,1)';
+        ctx.globalAlpha = f.opacity;
+        drawSnowflakeOn(ctx, 0, 0, f.r);
+        ctx.globalAlpha = 1;
+      }
+      ctx.restore();
+    });
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
 function initWakeLock() {
 
   // Method 1: WakeLock API
